@@ -1,164 +1,211 @@
-# ITMoscowAPI (Unofficial)
+# ITMoscow API
 
-API для получения корпусов, групп, замен и расписания колледжа ИТ. Москва (бывш. МГКЭИТ)
+Unofficial REST API for [IT Moscow College](https://it-moscow.pro) (formerly МГКЭИТ).
+Provides access to buildings, groups, and class schedules via HTML scraping.
 
-### Официальный инстанс
+Built with **Python + FastAPI**. Deployable as a serverless app on [Vercel](https://vercel.com).
 
-`itmoscow.javaplugg.net:8080`
+> The project may break at any time if the website structure changes.
 
-### Технологии
+---
 
-Spring Boot 3.5.x, Java 21, JPA, Caffeine, Jsoup, BCrypt
+## Authentication
 
-### Принцип работы
+All endpoints require a Bearer token:
 
-Передаваемые данные парсятся с официального сайта и кэшируются  
-Официальное API не используется, поскольку не соответствует документации и с ним невозможно работать
-Проект может в любой момент поломаться, если структура сайта изменится
+```
+Authorization: Bearer <your-token>
+```
 
-### Авторизация
+The token is set via the `API_TOKEN` environment variable. You create the token yourself — no registration needed.
 
-Для работы с API нужно получить токен  
-Для получения токена нужно получить одноразовый пароль  
-Одноразовый пароль можно получить отправив POST запрос на /itmoscow/auth/otp (подробнее в запросах)  
-Токен можно получить отправив POST запрос на /itmoscow/auth/token (подробнее в запросах)
+---
 
-### Конфигурация
+## Endpoints
 
-При селф-хосте необходимо настроить следующие поля:  
-`String itmoscowUrl` - в данный момент https://it-moscow.pro  
-`int otpCacheLifetimeMinutes` - время жизни кэша одноразовых паролей в минутах  
-`int tokenCacheLifetimeMinutes` - время жизни кэша токенов в минутах  
-`int cacheLifetimeMinutes` - время жизни остального кэша  
-`int maxRequestsPerMinute` - максимальное кол-во запросов в минуту от IP или по токену
+### `GET /api/buildings`
 
-### Запросы
+Returns the list of all buildings.
 
-См. модуль ITMoscowAPIDTOs
+**Response**
+```json
+[
+  { "name": "Коренчева", "key": "korencheva" },
+  { "name": "Каховка", "key": "kahovka" }
+]
+```
 
-`POST` `/itmoscow/auth/otp` `Без авторизации`
+---
 
-Сгенерировать и отправить одноразовый пароль на указанный адрес электронной почты
+### `GET /api/groups`
 
+Returns all groups from all buildings.
+
+**Response**
+```json
+[
+  { "name": "ИС-24-9", "building": "korencheva", "key": "%D0%98%D0%A1-24-9" }
+]
+```
+
+- `building` — building key
+- `key` — URL-encoded group name (for filtering)
+
+---
+
+### `POST /api/groups`
+
+Filter groups by building key and/or group key. Both fields are optional.
+
+**Request body**
 ```json
 {
-    "email": "example@gmail.com"
+  "building": "korencheva",
+  "key": "%D0%98%D0%A1-24-9"
 }
 ```
 
-`POST` `/itmoscow/auth/token` `Без авторизации`
+**Response** — same format as `GET /api/groups`
 
-Сгенерировать токен и отправить на почту, ранее указанную в одноразовом пароле
+---
 
+### `POST /itmoscow/api/v1/schedule/day`
+
+Get the schedule for a group on a specific weekday.
+
+**Request body**
 ```json
 {
-    "otp": "example"
+  "group": "ИС-24-9",
+  "building": "korencheva",
+  "weekday": 0,
+  "replacements": false
 }
 ```
 
-`GET` `/itmoscow/api/v1/buildings/list`
+| Field          | Type   | Description                                                        |
+|----------------|--------|--------------------------------------------------------------------|
+| `group`        | string | Group name (from `/api/groups` → `name`)                          |
+| `building`     | string | Building key (from `/api/groups` → `building`)                    |
+| `weekday`      | int    | 0 = Monday … 5 = Saturday                                         |
+| `replacements` | bool   | Apply today's replacements. Only valid when `weekday` == today.   |
 
-Получить список корпусов колледжа
-
+**Response**
 ```json
 {
-  "buildings": [
+  "weekday": "Понедельник",
+  "lessons": [
     {
-      "name": "Миллионщикова",
-      "key": "ttm"
-    },
-    {
-      "name": "Коломенская",
-      "key": "ttk"
+      "number": 1,
+      "time": "08:00 - 09:35",
+      "subject": "Математика",
+      "teacher": "Иванов И.И.",
+      "room": "Кабинет 301"
     }
   ]
 }
 ```
 
-`POST` `/itmoscow/api/v1/groups/list`
+> Returns `400` if `replacements: true` but `weekday` is not today (Moscow time, UTC+3).
 
-Получить список групп в корпусе
+---
 
-```json
-{
-    "building": {
-        "name": "Миллионщикова",
-        "key": "ttm"
-    }
-}
-```
-```json
-{
-    "groups": [
-        {
-            "name": "1ВР-1-25"
-        },
-        {
-            "name": "1ИП-1-25 (п)"
-        }
-    ]
-}
-```
+## Local Development
 
-`POST` `/itmoscow/api/v1/schedule/day`
+**Requirements:** Python 3.11+
 
-Получить расписание по индексу дня недели
-`replacements` - применять ли замены к расписанию
+```bash
+# 1. Clone and enter the repo
+git clone https://github.com/Koteukin69/ITMoscowAPI.git
+cd ITMoscowAPI
 
-```json
-{
-    "building": {
-        "name": "Миллионщикова",
-        "key": "ttm"
-    },
-    "group": {
-        "name": "1ВР-1-25"
-    },
-    "weekday": 0,
-    "replacements": true
-}
-```
-```json
-{
-    "schedule": {
-        "weekday": "Понедельник",
-        "lessons": [
-            {
-                "number": 1,
-                "time": "08:30 - 09:15",
-                "subject": "ОУП. 03 Математика",
-                "teacher": "Данилов Е.И.",
-                "room": "Академика Миллионщикова. каб: 204"
-            }
-        ]
-    }
-}
+# 2. Create a virtual environment
+python -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Set up environment
+cp .env.example .env
+# Edit .env — set API_TOKEN to any secret string you choose
+
+# 5. Run
+uvicorn app.main:app --reload
 ```
 
-`POST` `/itmoscow/api/v1/schedule/replacements`
+- API: `http://localhost:8000`
+- Interactive docs: `http://localhost:8000/docs`
 
-Получить замены на сегодня
+---
 
-```json
-{
-    "building": {
-        "name": "Миллионщикова",
-        "key": "ttm"
-    },
-    "group": {
-        "name": "1ВР-1-25"
-    }
-}
+## Deploy to Vercel
+
+### Prerequisites
+
+- GitHub account with this repo
+- [Vercel account](https://vercel.com/signup) (free tier is enough)
+
+### Step 1 — Import the repository
+
+Go to [vercel.com/new](https://vercel.com/new) → **Add New Project** → import your GitHub repo.
+
+### Step 2 — Project settings
+
+On the configuration screen:
+- **Framework Preset:** Other
+- **Root Directory:** `/` (leave default)
+- No build command needed
+
+### Step 3 — Set environment variables
+
+In **Settings → Environment Variables**, add:
+
+| Name           | Value                   | Notes                              |
+|----------------|-------------------------|------------------------------------|
+| `API_TOKEN`    | your secret token       | Required. Any string you choose.   |
+| `ITMOSCOW_URL` | `https://it-moscow.pro` | Optional, this is the default.     |
+
+### Step 4 — Deploy
+
+Click **Deploy**. Vercel installs `requirements.txt` and deploys the app.
+
+Your API will be live at `https://<your-project>.vercel.app`.
+
+### How it works
+
+- `vercel.json` routes all requests to `api/index.py`
+- `api/index.py` exposes the FastAPI ASGI app to Vercel's Python runtime
+- Each invocation runs as a serverless function
+- Building and group data is cached in-memory on warm instances (30 min TTL)
+- Schedule data is always fetched fresh (no caching)
+
+### Updates
+
+Push to GitHub → Vercel redeploys automatically.
+
+---
+
+## Project Structure
+
 ```
-```json
-{
-    "replacements": [
-        {
-            "number": 1,
-            "subject": "ОУП. 03 Математика",
-            "teacher": "Данилов Е.И.",
-            "room": "Академика Миллионщикова. каб: 204"
-        }
-    ]
-}
+├── api/
+│   └── index.py              # Vercel entry point
+├── app/
+│   ├── main.py               # FastAPI app
+│   ├── config.py             # Settings (API_TOKEN, ITMOSCOW_URL)
+│   ├── auth.py               # Bearer token verification
+│   ├── models.py             # Pydantic models
+│   ├── routers/
+│   │   ├── buildings.py      # GET /api/buildings
+│   │   ├── groups.py         # GET/POST /api/groups
+│   │   └── schedule.py       # POST /itmoscow/api/v1/schedule/day
+│   └── services/
+│       ├── html_service.py   # Async HTTP fetching
+│       ├── building_service.py
+│       ├── group_service.py
+│       └── schedule_service.py
+├── requirements.txt
+├── vercel.json
+└── .env.example
 ```
