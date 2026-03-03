@@ -36,33 +36,10 @@ async def get_all_groups(buildings: List[Building], base_url: str) -> List[Group
 def _parse_groups(html: str, building_key: str) -> List[GroupItem]:
     soup = BeautifulSoup(html, "lxml")
 
-    # Sidebar: lg:w-[300px] panel
-    sidebar = soup.find(lambda tag: tag.name == "div" and all(c in (tag.get("class") or []) for c in [
-        "lg:w-[300px]", "lg:shrink-0", "lg:flex", "lg:flex-col",
-    ]))
-    if not sidebar:
-        raise RuntimeError(f"Failed to parse groups for building '{building_key}': sidebar not found")
-
-    # Overlay wrapper
-    overlay = sidebar.find(lambda tag: tag.name == "div" and all(c in (tag.get("class") or []) for c in [
-        "lg:h-full", "fixed", "inset-0", "z-40", "lg:static",
-    ]))
-    if not overlay:
-        raise RuntimeError(f"Failed to parse groups for building '{building_key}': overlay not found")
-
-    # Inner white panel
-    panel = overlay.find(lambda tag: tag.name == "div" and all(c in (tag.get("class") or []) for c in [
-        "absolute", "left-0", "top-0", "bg-white", "shadow-2xl", "lg:static",
-    ]))
-    if not panel:
-        raise RuntimeError(f"Failed to parse groups for building '{building_key}': panel not found")
-
-    # Scrollable list container
-    list_container = panel.find(lambda tag: tag.name == "div" and all(c in (tag.get("class") or []) for c in [
-        "flex", "flex-col", "gap-2", "flex-1", "overflow-y-auto", "min-h-0",
-    ]))
+    # Groups list (now a <ul id="groupsList">)
+    list_container = soup.find("ul", id="groupsList")
     if not list_container:
-        raise RuntimeError(f"Failed to parse groups for building '{building_key}': list container not found")
+        raise RuntimeError(f"Failed to parse groups for building '{building_key}': groupsList not found")
 
     group_items = list_container.find_all(class_="group-item")
 
