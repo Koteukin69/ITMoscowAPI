@@ -30,23 +30,15 @@ async def get_all_buildings(base_url: str) -> List[Building]:
 def _parse_buildings(html: str) -> List[Building]:
     soup = BeautifulSoup(html, "lxml")
 
-    # Sticky top nav bar
-    nav = soup.find(lambda tag: tag.name == "div" and all(c in (tag.get("class") or []) for c in [
-        "sticky", "top-0", "z-40", "bg-white", "border-b", "border-gray-100",
-        "flex", "items-center", "justify-between",
+    # Sticky top nav bar (now a <header> element)
+    nav = soup.find(lambda tag: tag.name == "header" and all(c in (tag.get("class") or []) for c in [
+        "sticky", "top-0", "z-40", "bg-white",
     ]))
     if not nav:
         raise RuntimeError("Failed to parse buildings: nav not found")
 
-    # Hidden desktop menu row
-    menu_row = nav.find(lambda tag: tag.name == "div" and all(c in (tag.get("class") or []) for c in [
-        "hidden", "lg:flex", "mx-auto", "flex-1", "justify-center",
-    ]))
-    if not menu_row:
-        raise RuntimeError("Failed to parse buildings: menu_row not found")
-
-    # First dropdown group
-    group_div = menu_row.find(lambda tag: tag.name == "div" and "group" in (tag.get("class") or []) and "relative" in (tag.get("class") or []))
+    # First dropdown group (directly inside header, no intermediate menu_row wrapper)
+    group_div = nav.find(lambda tag: tag.name == "div" and "group" in (tag.get("class") or []) and "relative" in (tag.get("class") or []))
     if not group_div:
         raise RuntimeError("Failed to parse buildings: dropdown group not found")
 
@@ -66,8 +58,7 @@ def _parse_buildings(html: str) -> List[Building]:
     for link in links:
         href = link.get("href", "")
         key = href.lstrip("/")
-        first_child = link.find()
-        name = first_child.get_text(strip=True) if first_child else link.get_text(strip=True)
+        name = link.get_text(strip=True)
         if key and name:
             buildings.append(Building(name=name, key=key))
 
